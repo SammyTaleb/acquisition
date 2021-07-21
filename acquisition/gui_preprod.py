@@ -465,7 +465,7 @@ class Ui_MainWindow(object):
         self.grid_scans_2.addWidget(self.radio_infinite, 2, 0, 1, 1)
         self.spinbox_nbr_scan = QtWidgets.QSpinBox(self.scrollAreaWidgetContents_3)
         self.spinbox_nbr_scan.setStyleSheet(self.spinbox_style_sheet)
-        self.spinbox_nbr_scan.setMaximum(10000)
+        self.spinbox_nbr_scan.setMaximum(10000000)
 
         self.grid_scans_2.addWidget(self.spinbox_nbr_scan, 1, 0, 1, 1)
         self.gridLayout_5.addLayout(self.grid_scans_2, 2, 0, 1, 1)
