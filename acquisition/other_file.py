@@ -1,15 +1,21 @@
+import sys
+from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5.QtWidgets import QMessageBox, QWidget, QLabel
 from matplotlib.figure import Figure
 from matplotlib.animation import TimedAnimation
 from matplotlib.lines import Line2D
 from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
 from gui_preprod import *
 import seaborn as sns
+import numpy as np
 import pandas as pd
 import os
+from table_animation import TableWindow
 
 
 class MyMplCanvas(FigureCanvas, TimedAnimation):
-    def __init__(self, parent=None, config=None, conn=None):
+    def __init__(self, parent=None, config=None, conn=None, ui_table=None):
+        self.ui_table = ui_table
         self.config = config
         self.conn = conn
         self.fig = Figure(figsize=(15, 10), dpi=100)
@@ -31,9 +37,9 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
         color_palette = list(sns.color_palette(None, nbr))
         val = str(nbr) + "1"
         for i in range(nbr):
-            print(int(val + str(i + 1)))
             ax = self.fig.add_subplot(int(val + str(i + 1)))
             ax.set_xlabel('time')
+
             ax.set_ylabel(self.config['sensors'][i][0])
             ax.set_xlim(0, 100)
             ax.set_ylim(10, 40)
@@ -46,18 +52,17 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
         t = time.time() - self.start
         self.conn.inst.write("INIT;")
         self.conn.inst.write(":FETCH?;")
-        result=self.conn.inst.read()
+        result = self.conn.inst.read()
         y = result.split(',')[:len(self.axes)]
-        print(result)
         for i, val in enumerate(self.config['sensors']):
             self.data[i][0].append(t)
             self.data_final[f'time_{val[0]}_{val[1]}'].append(t)
             self.data[i][1].append(float(y[i]))
             self.data_final[f'value_{val[0]}_{val[1]}'].append(float(y[i]))
+        self.ui_table.append_row(self.data)
 
     def _draw_frame(self, framedata):
         i = framedata
-        print(i)
         self.data_gen()
         for i in range(len(self.lines)):
             self.lines[i].set_data(self.data[i][0], self.data[i][1])
@@ -72,14 +77,14 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
 
 
 class Ui_OtherWindow(object):
-    def __init__(self, MainWindow, config, conn, style):
+    def __init__(self, MainWindow, config, conn, style, ui_table):
         self.config = config
         self.conn = conn
         self.style = style
         self.win = MainWindow
         self.win.setObjectName("MainWindow")
         self.win.resize(1413, 1018)
-        self.central_widget = MyMplCanvas(self.win, config=self.config, conn=self.conn)
+        self.central_widget = MyMplCanvas(self.win, config=self.config, conn=self.conn, ui_table=ui_table)
         self.button_start = QtWidgets.QPushButton('RUNNING', self.central_widget)
         self.button_start.setStyleSheet(style)
         self.button_start.setFixedHeight(30)
@@ -102,7 +107,6 @@ class Ui_OtherWindow(object):
 
     def stop(self):
         data = pd.DataFrame(self.central_widget.data_final)
-        print(data)
         filename = self.config['file']['filename']
         filetype = self.config['file']['type']
         if filetype == 'csv':
@@ -113,7 +117,6 @@ class Ui_OtherWindow(object):
         self.button_start.deleteLater()
         self.button_pause.deleteLater()
         self.button_stop.deleteLater()
-        print(os.getcwd())
         os.startfile(f'{os.getcwd()}\data\saved\{filename}.{filetype}')
 
     def pause(self):
