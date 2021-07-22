@@ -91,8 +91,9 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
             ax.set_xlabel('time')
 
             ax.set_ylabel(self.config['sensors'][i][0]+" @"+self.config['sensors'][i][1])
-            ax.set_xlim(0, 100) #demander à l'utilisateur
-            ax.set_ylim(10, 40) #demander à l'utilisateur
+
+            ax.set_xlim(0, 5000)
+            ax.set_ylim(-45, 40)
             line = Line2D([], [], color=color_palette[i])
             ax.add_line(line)
             self.lines.append(line)
