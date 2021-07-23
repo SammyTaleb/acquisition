@@ -1,1 +1,1 @@
-{"sensors": [["TC", "101"], ["TC", "102"], ["TC", "103"]], "scans": 150, "delay": 0.5, "file": {"type": "xlsx", "filename": "saving"}}
+{"sensors": [["TC", "101"], ["TC", "102"], ["TC", "103"]], "scans": 5000, "delay": 10.0, "file": {"type": "xlsx", "filename": "Testconservation2307"}}
