@@ -25,12 +25,11 @@ logging.basicConfig(
 
 class Connection:
     def __init__(self, _logger, _config):
-        self.logger = _logger
         self.config = _config
-        self.logger.log('Opened a new connection instance', logging.info)
+        self.logger = _logger
         try:
             self.rm = pyvisa.ResourceManager()
-            self.logger.log('ressource manager created', logging.info)
+            # self.logger.log('ressource manager created', logging.info)
 
             self.inst = self.rm.open_resource(self.rm.list_resources()[0])
             time.sleep(1)
@@ -38,7 +37,11 @@ class Connection:
             self.logger.log(f"Connected to , {device.split(',')[0]} {device.split(',')[1]}", logging.info)
         except Exception as e:
             self.logger.log('Connection Failed', logging.error)
-        self.configure()
+        try:
+            self.logger.log(f"Trying to configure the device", logging.info)
+            self.configure()
+        except Exception as e:
+            self.logger.log(f'Configuration of the device has failed : {e}', logging.error)
 
     def configure(self):
         """
@@ -54,8 +57,9 @@ class Connection:
                 print(query)
                 self.inst.write(query)
         scan_list = "(@" + ','.join([sensor[1] for sensor in self.config['sensors']]) + ')'
+        print(scan_list)
         self.inst.write("ROUTE:SCAN " + scan_list)
-        self.logger.log('Configuration is done', logging.info)
+        # self.logger.log('Configuration is done', logging.info)
 
 
 class MyMplCanvas(FigureCanvas, TimedAnimation):
@@ -67,8 +71,8 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
         self.lines = []
         self.create_axes()
         self.data_final = {}
+        self.data_final[f'time'] = []
         for i in self.config['sensors']:
-            self.data_final[f'time_{i[0]}_{i[1]}'] = []
             self.data_final[f'value_{i[0]}_{i[1]}'] = []
         self.data = [[[], []] for i in range(len(self.axes))]
         FigureCanvas.__init__(self, self.fig)
@@ -77,17 +81,18 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
         self.start = time.time()
 
     def create_axes(self):
-        nbr = len(self.config['sensors'])
-        color_palette = list(sns.color_palette(None, nbr))
-        val = str(nbr) + "1"
-        for i in range(nbr):
+        nbr_sensors = len(self.config['sensors'])
+        color_palette = list(sns.color_palette(None, nbr_sensors))
+        val = str(nbr_sensors) + "1"
+        for i in range(nbr_sensors):
             print(int(val + str(i + 1)))
+            #  add_subplot(abc) where a is the number of plots, b is the column index (1,2,...), c is the row index
             ax = self.fig.add_subplot(int(val + str(i + 1)))
             ax.set_xlabel('time')
 
-            ax.set_ylabel(self.config['sensors'][i][0])
-            ax.set_xlim(0, 100)
-            ax.set_ylim(10, 40)
+            ax.set_ylabel(self.config['sensors'][i][0]+" @"+self.config['sensors'][i][1])
+            ax.set_xlim(0, 5000)
+            ax.set_ylim(-45, 40)
             line = Line2D([], [], color=color_palette[i])
             ax.add_line(line)
             self.lines.append(line)
@@ -97,12 +102,11 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
         t = time.time() - self.start
         self.conn.inst.write("INIT;")
         self.conn.inst.write(":FETCH?;")
-        result=self.conn.inst.read()
+        result = self.conn.inst.read()
         y = result.split(',')[:len(self.axes)]
-        print(result)
+        self.data_final[f'time'].append(t)
         for i, val in enumerate(self.config['sensors']):
             self.data[i][0].append(t)
-            self.data_final[f'time_{val[0]}_{val[1]}'].append(t)
             self.data[i][1].append(float(y[i]))
             self.data_final[f'value_{val[0]}_{val[1]}'].append(float(y[i]))
 
@@ -180,3 +184,99 @@ class Ui_OtherWindow(object):
         self.button_start.setDisabled(True)
         self.button_pause.setDisabled(False)
         self.central_widget.resume()
+
+
+"""
+class Animation:
+    def __init__(self, nbr_scan, _logger, _config, canvas):
+        self.conn = Connection(_logger, _config)
+        self.conn.configure()
+        self.start = time.time()
+        self.nbr_scan = nbr_scan
+        self.canvas = canvas
+
+    def data_gen(self):
+        cnt = 0
+        self.start = time.time()
+        while cnt < self.nbr_scan:
+            cnt += 1
+            t = time.time() - self.start
+            self.conn.inst.write("INIT;")
+            self.conn.inst.write(":FETCH?;")
+            y1, y2 = self.conn.inst.read().split(',')[:2]
+            # adapted the data generator to yield both sin and cos
+            yield t, float(y1), float(y2)
+
+    @staticmethod
+    def save(data):
+        t, y1, y2 = data
+        df = pd.DataFrame(
+            {"time": t, "Temp @101": y1, "Temp @102": y2},
+            columns=['time', "Temp @101", "Temp @102"]
+        )
+        print(df)
+        return df
+
+    def loop(self):
+        fig = self.canvas.fig
+        ax1 = self.canvas.ax1
+        ax2 = self.canvas.ax2
+        # intialize two line objects (one in each axes)
+        line1, = ax1.plot([], [], lw=2)
+        line2, = ax2.plot([], [], lw=2, color='r')
+        line = [line1, line2]
+        self.conn.inst.write("INIT;")
+        self.conn.inst.write(":FETCH?;")
+        # Read temperature (Celsius) from TMP102
+        result = self.conn.inst.read()
+        print(result)
+        y1_start, y2_start = list(map(lambda x: float(x), result.split(',')[:2]))
+        ax1.set_ylim(y1_start - 1, y1_start + 1)
+        ax1.set_xlim(0, 10)
+        ax1.grid()
+        ax2.set_ylim(y2_start - 1, y2_start + 1)
+        ax2.set_xlim(0, 10)
+        ax2.grid()
+        ax1.set_title('Channel 101')
+        ax2.set_title('Channel 102')
+        ax1.set_xlabel('time (seconds)')
+        ax2.set_xlabel('time (seconds)')
+        ax1.set_ylabel('Temperature (°C)')
+        ax2.set_ylabel('Temperature (°C)')
+        # initialize the data arrays
+        xdata, y1data, y2data = [], [], []
+
+        def run(data):
+            # update the data
+            t, y1, y2 = data
+            xdata.append(t)
+            y1data.append(y1)
+            y2data.append(y2)
+
+            # axis limits checking. Same as before, just for both axes
+            for ax in [ax1, ax2]:
+                xmin, xmax = ax.get_xlim()
+                if t >= xmax:
+                    ax.set_xlim(xmin, 2 * xmax)
+                    ax.figure.canvas.draw()
+            ymin, ymax = ax1.get_ylim()
+            if y1 >= ymax or y1 <= ymin:
+                ax1.set_ylim(min(y1data) - 2, max(y1data) + 2)
+                ax1.figure.canvas.draw()
+            ymin, ymax = ax2.get_ylim()
+            if y2 >= ymax or y2 <= ymin:
+                ax2.set_ylim(min(y2data) - 2, max(y2data) + 2)
+                ax2.figure.canvas.draw()
+
+            # update the data of both line objects
+            line[0].set_data(xdata, y1data)
+            line[1].set_data(xdata, y2data)
+
+            return line
+
+        self.ani = animation.FuncAnimation(fig, run, self.data_gen, blit=False, interval=1000 * self.conn.config['delay'],
+                                      repeat=False)
+        self.ani._start()
+        df = Animation.save(data=(xdata, y1data, y2data))
+        df.to_excel(f'acquisition.xlsx', sheet_name="acquisition")
+"""

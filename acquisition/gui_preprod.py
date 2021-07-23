@@ -11,7 +11,8 @@ from acquisition import *
 import logging, json, time
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QMessageBox
-
+from table_animation import *
+from other_file import Ui_OtherWindow
 
 class QTextEditLogger(logging.Handler):
     def __init__(self, parent):
@@ -279,11 +280,20 @@ class Ui_MainWindow(object):
         details.click()
         reply = msg.exec_()
         if reply == QMessageBox.Yes:
+            self.table_window = QtWidgets.QMainWindow()
+            self.table_window.setWindowTitle('Real Time Table')
+            QtWidgets.QApplication.setStyle(QtWidgets.QStyleFactory.create('Plastique'))
+            self.ui_table_window = TableWindow(self.table_window, self.config['sensors'])
+            self.table_window.show()
             self.otherwindow = QtWidgets.QMainWindow()
+            self.otherwindow.setWindowTitle('Real Time Plot')
             conn = Connection(self.dialog, self.config)
             QtWidgets.QApplication.setStyle(QtWidgets.QStyleFactory.create('Plastique'))
-            self.ui_canvas = Ui_OtherWindow(self.otherwindow, self.config, conn, self.push_button_style_sheet)
+            self.ui_canvas = Ui_OtherWindow(self.otherwindow, self.config, conn, self.push_button_style_sheet,self.ui_table_window)
             self.otherwindow.show()
+
+            # self.animation=Animation(self.config['scans'],self.dialog,self.config,self.ui_canvas.canvas)
+            # self.animation.loop()
 
     def setupUi(self, MainWindow):
         MainWindow.setObjectName("MainWindow")
@@ -455,7 +465,7 @@ class Ui_MainWindow(object):
         self.grid_scans_2.addWidget(self.radio_infinite, 2, 0, 1, 1)
         self.spinbox_nbr_scan = QtWidgets.QSpinBox(self.scrollAreaWidgetContents_3)
         self.spinbox_nbr_scan.setStyleSheet(self.spinbox_style_sheet)
-        self.spinbox_nbr_scan.setMaximum(10000)
+        self.spinbox_nbr_scan.setMaximum(10000000)
 
         self.grid_scans_2.addWidget(self.spinbox_nbr_scan, 1, 0, 1, 1)
         self.gridLayout_5.addLayout(self.grid_scans_2, 2, 0, 1, 1)
