@@ -1,16 +1,16 @@
-import time
-import pandas as pd
 import pyvisa
 import logging
 import matplotlib.pyplot as plt
 import seaborn as sns
-import sys
-from PyQt5 import QtCore, QtGui, QtWidgets
-from PyQt5.QtWidgets import QMessageBox, QWidget, QLabel
-from matplotlib.figure import Figure
+from PyQt5 import QtWidgets
+from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QTableWidget,QTableWidgetItem
 from matplotlib.animation import TimedAnimation
 from matplotlib.lines import Line2D
 from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+from matplotlib.lines import Line2D
+import time
 from gui_preprod import *
 import seaborn as sns
 import numpy as np
@@ -40,7 +40,7 @@ class Connection:
             self.configure()
         except Exception as e:
             self.logger.log('Connection Failed', logging.error)
-            raise TimeoutError('Device is not found')
+            # raise TimeoutError('Device is not found')
 
     def configure(self):
         """
@@ -61,7 +61,9 @@ class Connection:
 
 
 class MyMplCanvas(FigureCanvas, TimedAnimation):
-    def __init__(self, parent=None, config=None, conn=None):
+    def __init__(self, parent=None, config=None, conn=None,table_window=None):
+        self.table_window = table_window
+        self.table_window.win.show()
         self.config = config
         self.conn = conn
         self.fig = Figure(figsize=(15, 10), dpi=100)
@@ -77,6 +79,8 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
         TimedAnimation.__init__(self, self.fig, interval=1000 * self.config['delay'], repeat=False)
         self.setParent(parent)
         self.start = time.time()
+        self.filetype = self.config['file']['type']
+        self.filename = f'{self.config["file"]["filename"]}-{datetime.datetime.now().strftime("%d-%m-%Y-%H-%M")}.{self.filetype}'
 
     def create_axes(self):
         nbr = len(self.config['sensors'])
@@ -86,7 +90,7 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
             print(int(val + str(i + 1)))
             ax = self.fig.add_subplot(int(val + str(i + 1)))
             ax.set_xlabel('time')
-            ax.set_ylabel(self.config['sensors'][i][0]+" @"+self.config['sensors'][i][1])
+            ax.set_ylabel(self.config['sensors'][i][0] + " @" + self.config['sensors'][i][1])
             ax.set_xlim(0, 20)
             ax.set_ylim(-5, 5)
             line = Line2D([], [], color=color_palette[i])
@@ -96,33 +100,40 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
 
     def data_gen(self):
         t = time.time() - self.start
-        self.conn.inst.write("INIT;")
-        self.conn.inst.write(":FETCH?;")
-        result=self.conn.inst.read()
-        #result = str(np.random.random()*20)+","+str(np.random.random()*40)+","+str(np.random.random()*30)
+        # self.conn.inst.write("INIT;")
+        # self.conn.inst.write(":FETCH?;")
+        # result=self.conn.inst.read()
+        result = str(np.random.random() * 20) + "," + str(np.random.random() * 40) + "," + str(np.random.random() * 30)
         y = result.split(',')[:len(self.axes)]
         for i, val in enumerate(self.config['sensors']):
             self.data[i][0].append(t)
             self.data_final[f'time_{val[0]}_{val[1]}'].append(t)
             self.data[i][1].append(float(y[i]))
             self.data_final[f'value_{val[0]}_{val[1]}'].append(float(y[i]))
+        self.save()
+        self.table_window.add_row(self.data)
 
     def _draw_frame(self, framedata):
         i = framedata
         self.data_gen()
         for i in range(len(self.lines)):
             self.lines[i].set_data(self.data[i][0], self.data[i][1])
-            print('max:',max(self.data[i][0]))
-            print('axes',self.axes[i].get_xlim()[1]+10)
             # Auto scale X_lim up
-            if max(self.data[i][0])>self.axes[i].get_xlim()[1]-5:
-                self.axes[i].set_xlim(0,max(self.data[i][0])+10)
+            if max(self.data[i][0]) > self.axes[i].get_xlim()[1] - 5:
+                self.axes[i].set_xlim(0, max(self.data[i][0]) + 10)
             # Auto Scale y_lim up
-            if max(self.data[i][1])>self.axes[i].get_ylim()[1]-5:
+            if max(self.data[i][1]) > self.axes[i].get_ylim()[1] - 5:
                 self.axes[i].set_ylim(self.axes[i].get_ylim()[0], max(self.data[i][1]) + 2)
-            if min(self.data[i][1])<self.axes[i].get_ylim()[0]+5:
-                self.axes[i].set_ylim(min(self.data[i][1]) - 2,self.axes[i].get_ylim()[1])
+            if min(self.data[i][1]) < self.axes[i].get_ylim()[0] + 5:
+                self.axes[i].set_ylim(min(self.data[i][1]) - 2, self.axes[i].get_ylim()[1])
         self._drawn_artists = self.lines
+
+    def save(self):
+        data = pd.DataFrame(self.data_final)
+        if self.filetype == 'csv':
+            data.to_csv('data/saved/' + self.filename)
+        else:
+            data.to_excel('data/saved/' + self.filename)
 
     def new_frame_seq(self):
         return iter(range(self.config['scans']))
@@ -132,15 +143,49 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
             line.set_data([], [])
 
 
+class Ui_Table_Window(object):
+    def __init__(self, MainWindow, sensors_config):
+        self.sensors = sensors_config
+        self.win = MainWindow
+        self.win.setWindowTitle("Real Time Table")
+        self.win.resize(1413, 1018)
+        self.table = QTableWidget(self.win)
+        self.table.setFixedWidth(1413)
+        self.table.setFixedHeight(1018)
+        self.table.setColumnCount(len(self.sensors)+1)
+        self.table.setRowCount(0)
+        header = self.table.horizontalHeader()
+        for i in range(len(self.sensors)+1):
+            header.setSectionResizeMode(i, QtWidgets.QHeaderView.ResizeToContents)
+        self.add_row([(["Time"],[self.sensors[i][0]+" @"+self.sensors[i][1]]) for i in range(len(self.sensors))],False)
+
+    def add_row(self,data,is_numeric=True):
+        row_count = self.table.rowCount()
+        self.table.insertRow(row_count)
+        if is_numeric :
+            item = QTableWidgetItem(str(np.round(data[0][0][-1],2)))
+        else:
+            item = QTableWidgetItem(str(data[0][0][-1]))
+        item.setTextAlignment(Qt.AlignHCenter)
+        self.table.setItem(row_count,0,item)
+        for i in range(len(self.sensors)):
+            if is_numeric:
+                item = QTableWidgetItem(str(np.round(data[i][1][-1],2)))
+            else:
+                item = QTableWidgetItem(str(data[i][1][-1]))
+            item.setTextAlignment(Qt.AlignHCenter)
+            self.table.setItem(row_count, i+1, item)
+
+
 class Ui_OtherWindow(object):
-    def __init__(self, MainWindow, config, conn, style):
+    def __init__(self, MainWindow, config, conn, style,ui_table_window):
         self.config = config
         self.conn = conn
         self.style = style
         self.win = MainWindow
-        self.win.setObjectName("MainWindow")
+        self.win.setWindowTitle("Real Time Plot")
         self.win.resize(1413, 1018)
-        self.central_widget = MyMplCanvas(self.win, config=self.config, conn=self.conn)
+        self.central_widget = MyMplCanvas(self.win, config=self.config, conn=self.conn,table_window = ui_table_window)
         self.button_start = QtWidgets.QPushButton('RUNNING', self.central_widget)
         self.button_start.setStyleSheet(style)
         self.button_start.setFixedHeight(30)
@@ -160,22 +205,21 @@ class Ui_OtherWindow(object):
         self.button_pause.clicked.connect(self.pause)
         self.button_stop.clicked.connect(self.stop)
         self.button_start.clicked.connect(self.start)
+        filename = self.config['file']['filename']
+        self.filetype = self.config['file']['type']
+        self.filename = self.central_widget.filename
 
     def stop(self):
         data = pd.DataFrame(self.central_widget.data_final)
-        print(data)
-        filename = self.config['file']['filename']
-        filetype = self.config['file']['type']
-        if filetype == 'csv':
-            data.to_csv(f'data/saved/{filename}-{datetime.datetime.now().strftime("%d-%m-%Y-%H-%M")}.{filetype}')
+        if self.filetype == 'csv':
+            data.to_csv('data/saved/' + self.filename)
         else:
-            data.to_excel(f'data/saved/{filename}-{datetime.datetime.now().strftime("%d-%m-%Y-%H-%M")}.{filetype}')
+            data.to_excel('data/saved/' + self.filename)
         self.central_widget.pause()
         self.button_start.deleteLater()
         self.button_pause.deleteLater()
         self.button_stop.deleteLater()
-        print(os.getcwd())
-        os.startfile(f'{os.getcwd()}\data\saved\{filename}-{datetime.datetime.now().strftime("%d-%m-%Y-%H-%M")}.{filetype}')
+        os.startfile(f'{os.getcwd()}\data\saved\{self.filename}')
 
     def pause(self):
         self.central_widget.pause()
