@@ -86,7 +86,7 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
             print(int(val + str(i + 1)))
             ax = self.fig.add_subplot(int(val + str(i + 1)))
             ax.set_xlabel('time')
-            ax.set_ylabel(self.config['sensors'][i][0])
+            ax.set_ylabel(self.config['sensors'][i][0]+" @"+self.config['sensors'][i][1])
             ax.set_xlim(0, 20)
             ax.set_ylim(-5, 5)
             line = Line2D([], [], color=color_palette[i])
