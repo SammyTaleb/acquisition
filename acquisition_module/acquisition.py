@@ -88,8 +88,9 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
             ax.set_xlabel('time')
 
             ax.set_ylabel(self.config['sensors'][i][0])
-            ax.set_xlim(0, 100)
-            ax.set_ylim(10, 40)
+            ax.set_xlim(0, 1000)
+            ax.set_ylim(-40, 40)
+            print(ax.get_xlim())
             line = Line2D([], [], color=color_palette[i])
             ax.add_line(line)
             self.lines.append(line)
@@ -100,6 +101,7 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
         self.conn.inst.write("INIT;")
         self.conn.inst.write(":FETCH?;")
         result=self.conn.inst.read()
+        #result = str(np.random.random()*20)+","+str(np.random.random()*40)+","+str(np.random.random()*30)
         y = result.split(',')[:len(self.axes)]
         print(result)
         for i, val in enumerate(self.config['sensors']):
@@ -114,6 +116,8 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
         self.data_gen()
         for i in range(len(self.lines)):
             self.lines[i].set_data(self.data[i][0], self.data[i][1])
+            #if max(self.data[i][0])>self.axes[i].get_xlim()[1]
+            #self.axes[i].set_
         self._drawn_artists = self.lines
 
     def new_frame_seq(self):
