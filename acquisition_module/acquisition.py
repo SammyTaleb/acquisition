@@ -16,6 +16,7 @@ import seaborn as sns
 import numpy as np
 import pandas as pd
 import os
+import datetime
 
 logging.basicConfig(
     format='%(asctime)s %(levelname)-8s %(message)s',
@@ -46,7 +47,6 @@ class Connection:
         configure the acquisition_module measures
         :return:
         """
-
         self.inst.timeout = 5000  # set a delay
         self.inst.write("*CLS")  # clear
         self.inst.write("*RST")  # reset
@@ -74,7 +74,7 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
             self.data_final[f'value_{i[0]}_{i[1]}'] = []
         self.data = [[[], []] for i in range(len(self.axes))]
         FigureCanvas.__init__(self, self.fig)
-        TimedAnimation.__init__(self, self.fig, interval=1000 * self.config['delay'], repeat=False, blit=True)
+        TimedAnimation.__init__(self, self.fig, interval=1000 * self.config['delay'], repeat=False)
         self.setParent(parent)
         self.start = time.time()
 
@@ -86,11 +86,9 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
             print(int(val + str(i + 1)))
             ax = self.fig.add_subplot(int(val + str(i + 1)))
             ax.set_xlabel('time')
-
             ax.set_ylabel(self.config['sensors'][i][0])
-            ax.set_xlim(0, 1000)
-            ax.set_ylim(-40, 40)
-            print(ax.get_xlim())
+            ax.set_xlim(0, 20)
+            ax.set_ylim(-5, 5)
             line = Line2D([], [], color=color_palette[i])
             ax.add_line(line)
             self.lines.append(line)
@@ -103,7 +101,6 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
         result=self.conn.inst.read()
         #result = str(np.random.random()*20)+","+str(np.random.random()*40)+","+str(np.random.random()*30)
         y = result.split(',')[:len(self.axes)]
-        print(result)
         for i, val in enumerate(self.config['sensors']):
             self.data[i][0].append(t)
             self.data_final[f'time_{val[0]}_{val[1]}'].append(t)
@@ -112,12 +109,19 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
 
     def _draw_frame(self, framedata):
         i = framedata
-        print(i)
         self.data_gen()
         for i in range(len(self.lines)):
             self.lines[i].set_data(self.data[i][0], self.data[i][1])
-            #if max(self.data[i][0])>self.axes[i].get_xlim()[1]
-            #self.axes[i].set_
+            print('max:',max(self.data[i][0]))
+            print('axes',self.axes[i].get_xlim()[1]+10)
+            # Auto scale X_lim up
+            if max(self.data[i][0])>self.axes[i].get_xlim()[1]-5:
+                self.axes[i].set_xlim(0,max(self.data[i][0])+10)
+            # Auto Scale y_lim up
+            if max(self.data[i][1])>self.axes[i].get_ylim()[1]-5:
+                self.axes[i].set_ylim(self.axes[i].get_ylim()[0], max(self.data[i][1]) + 2)
+            if min(self.data[i][1])<self.axes[i].get_ylim()[0]+5:
+                self.axes[i].set_ylim(min(self.data[i][1]) - 2,self.axes[i].get_ylim()[1])
         self._drawn_artists = self.lines
 
     def new_frame_seq(self):
@@ -163,15 +167,15 @@ class Ui_OtherWindow(object):
         filename = self.config['file']['filename']
         filetype = self.config['file']['type']
         if filetype == 'csv':
-            data.to_csv(f'data/saved/{filename}.{filetype}')
+            data.to_csv(f'data/saved/{filename}-{datetime.datetime.now().strftime("%d-%m-%Y-%H-%M")}.{filetype}')
         else:
-            data.to_excel(f'data/saved/{filename}.{filetype}')
+            data.to_excel(f'data/saved/{filename}-{datetime.datetime.now().strftime("%d-%m-%Y-%H-%M")}.{filetype}')
         self.central_widget.pause()
         self.button_start.deleteLater()
         self.button_pause.deleteLater()
         self.button_stop.deleteLater()
         print(os.getcwd())
-        os.startfile(f'{os.getcwd()}\data\saved\{filename}.{filetype}')
+        os.startfile(f'{os.getcwd()}\data\saved\{filename}-{datetime.datetime.now().strftime("%d-%m-%Y-%H-%M")}.{filetype}')
 
     def pause(self):
         self.central_widget.pause()
