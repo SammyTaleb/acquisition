@@ -55,6 +55,8 @@ class Connection:
                 query = f"CONF:TEMP TC,K,(@{sensor[1]})"
                 print(query)
                 self.inst.write(query)
+
+
         scan_list = "(@" + ','.join([sensor[1] for sensor in self.config['sensors']]) + ')'
         self.inst.write("ROUTE:SCAN " + scan_list)
         self.logger.log('Configuration is done', logging.info)
