@@ -2,7 +2,7 @@ import pyvisa
 import logging
 import matplotlib.pyplot as plt
 import seaborn as sns
-from PyQt5 import QtWidgets
+from PyQt5 import QtWidgets,QtCore,QtGui
 from PyQt5.QtCore import Qt
 from PyQt5.QtWidgets import QTableWidget,QTableWidgetItem
 from matplotlib.animation import TimedAnimation
@@ -11,7 +11,6 @@ from matplotlib.backends.backend_qt4agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from matplotlib.lines import Line2D
 import time
-from gui_preprod import *
 import seaborn as sns
 import numpy as np
 import pandas as pd
@@ -28,18 +27,19 @@ class Connection:
     def __init__(self, _logger, _config):
         self.logger = _logger
         self.config = _config
-        self.logger.log('Opened a new connection instance', logging.info)
+        #self.logger.log('Opened a new connection instance', logging.info)
         try:
             self.rm = pyvisa.ResourceManager()
-            self.logger.log('ressource manager created', logging.info)
+            #self.logger.log('ressource manager created', logging.info)
 
             self.inst = self.rm.open_resource(self.rm.list_resources()[0])
             time.sleep(1)
             device = self.inst.query("*IDN?")
-            self.logger.log(f"Connected to , {device.split(',')[0]} {device.split(',')[1]}", logging.info)
+            #self.logger.log(f"Connected to , {device.split(',')[0]} {device.split(',')[1]}", logging.info)
             self.configure()
         except Exception as e:
-            self.logger.log('Connection Failed', logging.error)
+            pass
+            #self.logger.log('Connection Failed', logging.error)
             # raise TimeoutError('Device is not found')
 
     def configure(self):
@@ -57,13 +57,13 @@ class Connection:
                 self.inst.write(query)
         scan_list = "(@" + ','.join([sensor[1] for sensor in self.config['sensors']]) + ')'
         self.inst.write("ROUTE:SCAN " + scan_list)
-        self.logger.log('Configuration is done', logging.info)
+        #self.logger.log('Configuration is done', logging.info)
 
 
 class MyMplCanvas(FigureCanvas, TimedAnimation):
     def __init__(self, parent=None, config=None, conn=None,table_window=None):
         self.table_window = table_window
-        self.table_window.win.show()
+        #self.table_window.win.show()
         self.config = config
         self.conn = conn
         self.fig = Figure(figsize=(15, 10), dpi=100)
@@ -180,49 +180,67 @@ class Ui_Table_Window(object):
 class Ui_OtherWindow(object):
     def __init__(self, MainWindow, config, conn, style,ui_table_window):
         self.config = config
+        self.sensors = self.config['sensors']
         self.conn = conn
         self.style = style
         self.win = MainWindow
         self.win.setWindowTitle("Real Time Plot")
         self.win.resize(1413, 1018)
-        self.central_widget = MyMplCanvas(self.win, config=self.config, conn=self.conn,table_window = ui_table_window)
-        self.button_start = QtWidgets.QPushButton('RUNNING', self.central_widget)
+        self.centralwidget = QtWidgets.QWidget(MainWindow)
+        self.gridLayout_2 = QtWidgets.QGridLayout(self.centralwidget)
+        self.gridLayout = QtWidgets.QGridLayout()
+        self.gridLayout_2.addLayout(self.gridLayout, 0, 0, 1, 1)
+        self.table = QTableWidget(self.win)
+        self.table.setColumnCount(len(self.sensors) + 1)
+        self.table.setRowCount(0)
+        self.table.setMinimumWidth(500)
+        header = self.table.horizontalHeader()
+        for i in range(len(self.sensors) + 1):
+            header.setSectionResizeMode(i, QtWidgets.QHeaderView.Stretch)
+        self.add_row([(["Time"], [self.sensors[i][0] + " @" + self.sensors[i][1]]) for i in range(len(self.sensors))],
+                     False)
+        font = QtGui.QFont()
+        font.setBold(True)
+        for i in range(len(self.sensors)+1):
+            self.table.item(0, i).setFont(font)
+        self.mplCanvas_widget = MyMplCanvas(self.win, config=self.config, conn=self.conn, table_window=self)
+        self.gridLayout_2.addWidget(self.table, 1, 0, 1, 3)
+        self.gridLayout_2.addWidget(self.mplCanvas_widget, 0, 3, 2, 2)
+        MainWindow.setCentralWidget(self.centralwidget)
+
+        self.button_start = QtWidgets.QPushButton('RUNNING')
         self.button_start.setStyleSheet(style)
-        self.button_start.setFixedHeight(30)
-        self.button_start.setFixedWidth(200)
-        self.button_start.move(50, 300)
+        self.gridLayout_2.addWidget(self.button_start,0,0,1,1)
         self.button_start.setDisabled(True)
-        self.button_stop = QtWidgets.QPushButton('STOP', self.central_widget)
+        self.button_stop = QtWidgets.QPushButton('STOP')
         self.button_stop.setStyleSheet(style)
-        self.button_stop.setFixedHeight(30)
-        self.button_stop.setFixedWidth(200)
-        self.button_stop.move(50, 900)
-        self.button_pause = QtWidgets.QPushButton('PAUSE', self.central_widget)
+        self.gridLayout_2.addWidget(self.button_stop,0,1,1,1)
+        self.button_pause = QtWidgets.QPushButton('PAUSE')
         self.button_pause.setStyleSheet(style)
-        self.button_pause.setFixedHeight(30)
-        self.button_pause.setFixedWidth(200)
-        self.button_pause.move(50, 600)
+        self.gridLayout_2.addWidget(self.button_pause, 0, 2, 1, 1)
         self.button_pause.clicked.connect(self.pause)
         self.button_stop.clicked.connect(self.stop)
         self.button_start.clicked.connect(self.start)
         filename = self.config['file']['filename']
         self.filetype = self.config['file']['type']
-        self.filename = self.central_widget.filename
+        self.filename = self.mplCanvas_widget.filename
+        QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def stop(self):
-        data = pd.DataFrame(self.central_widget.data_final)
+        data = pd.DataFrame(self.mplCanvas_widget.data_final)
         if self.filetype == 'csv':
             data.to_csv('data/saved/' + self.filename)
         else:
             data.to_excel('data/saved/' + self.filename)
-        self.central_widget.pause()
+        self.mplCanvas_widget.pause()
         self.button_start.deleteLater()
         self.button_pause.deleteLater()
         self.button_stop.deleteLater()
+        self.table.deleteLater()
         os.startfile(f'{os.getcwd()}\data\saved\{self.filename}')
 
     def pause(self):
-        self.central_widget.pause()
+        self.mplCanvas_widget.pause()
         self.button_start.setDisabled(False)
         self.button_start.setText('RESUME')
         self.button_pause.setDisabled(True)
@@ -233,4 +251,21 @@ class Ui_OtherWindow(object):
         self.button_pause.setText('PAUSE')
         self.button_start.setDisabled(True)
         self.button_pause.setDisabled(False)
-        self.central_widget.resume()
+        self.mplCanvas_widget.resume()
+
+    def add_row(self,data,is_numeric=True):
+        row_count = self.table.rowCount()
+        self.table.insertRow(row_count)
+        if is_numeric :
+            item = QTableWidgetItem(str(np.round(data[0][0][-1],2)))
+        else:
+            item = QTableWidgetItem(str(data[0][0][-1]))
+        item.setTextAlignment(Qt.AlignHCenter)
+        self.table.setItem(row_count,0,item)
+        for i in range(len(self.sensors)):
+            if is_numeric:
+                item = QTableWidgetItem(str(np.round(data[i][1][-1],2)))
+            else:
+                item = QTableWidgetItem(str(data[i][1][-1]))
+            item.setTextAlignment(Qt.AlignHCenter)
+            self.table.setItem(row_count, i+1, item)
