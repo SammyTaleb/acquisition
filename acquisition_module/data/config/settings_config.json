@@ -1,1 +1,1 @@
-{"sensors": [["TC", "101"], ["TC", "102"], ["TC", "103"]], "scans": 150, "delay": 0.5, "file": {"type": "xlsx", "filename": "test"}}
+{"sensors": [["TC", "101", [0.0, 0.0]], ["TC", "102", [0.0, 10.0]], ["TC", "103", [6.0, 0.0]]], "scans": 150, "delay": 0.5, "file": "C:/Users/sammy/Desktop/test.csv"}

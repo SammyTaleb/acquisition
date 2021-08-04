@@ -43,7 +43,7 @@ class MyDialog(QtWidgets.QDialog, QtWidgets.QPlainTextEdit):
 class Ui_MainWindow(object):
     def __init__(self, MainWindow):
         self.sensor_limit = True
-        self.sensors = {"sensors": [], "sensor_labels": [], "channels": [], "channel_labels": []}
+        self.sensors = {"sensors": [], "sensor_labels": [], "channels": [], "channel_labels": [],"calibration":[],"calibration_labels":[]}
         self.config = {}
         self.palette_text_color = QtGui.QPalette()
         brush = QtGui.QBrush(QtGui.QColor(102, 0, 51))
@@ -74,6 +74,14 @@ class Ui_MainWindow(object):
             self.gridLayout_2.removeWidget(self.sensors['channels'][-1])
             self.sensors['channels'][-1].deleteLater()
             self.sensors['channels'] = self.sensors['channels'][:-1]
+            self.gridLayout_2.removeWidget(self.sensors['calibration_labels'][-1])
+            self.sensors['calibration_labels'][-1].deleteLater()
+            self.sensors['calibration_labels'] = self.sensors['calibration_labels'][:-1]
+            for i in range(2):
+                self.gridLayout_2.removeWidget(self.sensors['calibration'][-1][i])
+                self.sensors['calibration'][-1][i].deleteLater()
+            self.sensors['calibration'] = self.sensors['calibration'][:-1]
+
 
     def add_sensor_decorator(self, func):
         def run():
@@ -81,7 +89,7 @@ class Ui_MainWindow(object):
 
         return run
 
-    def add_sensor(self, sensor='TC', channel='101'):
+    def add_sensor(self, sensor='TC', channel='101',x0=0,x1=1):
         if len(self.sensors['sensor_labels']) >= 6 and self.sensor_limit:
             msgbox = QMessageBox(QMessageBox.Question, "Sensors Limit Reached",
                                  "More than six sensors have been registered, press yes to remove the sensor number limit. ?")
@@ -94,7 +102,7 @@ class Ui_MainWindow(object):
         else:
             self.font.setPointSize(12)
             labels = []
-            for i in range(2):
+            for i in range(3):
                 label = QtWidgets.QLabel(self.scrollAreaWidgetContents)
                 label.setPalette(self.palette_text_color)
                 label.setFont(self.font)
@@ -103,7 +111,8 @@ class Ui_MainWindow(object):
                 labels.append(label)
             labels[0].setText("Sensor")
             labels[1].setText("Channel")
-
+            labels[2].setText("Calibration")
+            labels[2].setToolTip('Add calibration values to get new_value = x0+x1*value')
             combo_sensor = QtWidgets.QComboBox(self.scrollAreaWidgetContents)
             combo_sensor.setFont(self.font)
             combo_sensor.setStyleSheet(self.combobox_style_sheet)
@@ -123,8 +132,18 @@ class Ui_MainWindow(object):
             if index >= 0:
                 combo_sensor.setCurrentIndex(index)
 
+            spin_a = QtWidgets.QDoubleSpinBox(self.scrollAreaWidgetContents)
+            spin_a.setStyleSheet(self.spinbox_style_sheet)
+            spin_b = QtWidgets.QDoubleSpinBox(self.scrollAreaWidgetContents)
+            spin_b.setStyleSheet(self.spinbox_style_sheet)
+            spin_a.setValue(x1)
+            spin_b.setValue(x0)
+            spin_a.setToolTip("x1 value")
+            spin_b.setToolTip("x0 value")
+            self.sensors["calibration"].append([spin_b,spin_a])
             self.sensors['sensor_labels'].append(labels[0])
             self.sensors['channel_labels'].append(labels[1])
+            self.sensors['calibration_labels'].append(labels[2])
             self.sensors['sensors'].append(combo_sensor)
             self.sensors['channels'].append(combo_channel)
 
@@ -133,6 +152,9 @@ class Ui_MainWindow(object):
             self.gridLayout_2.addWidget(self.sensors['channel_labels'][-1], len(self.sensors['channel_labels']), 2, 1,
                                         1)
             self.gridLayout_2.addWidget(self.sensors['channels'][-1], len(self.sensors['channels']), 3, 1, 1)
+            self.gridLayout_2.addWidget(self.sensors['calibration_labels'][-1], len(self.sensors['calibration_labels']), 5, 1, 1)
+            self.gridLayout_2.addWidget(self.sensors["calibration"][-1][0],len(self.sensors["calibration"]),6,1,1)
+            self.gridLayout_2.addWidget(self.sensors["calibration"][-1][1], len(self.sensors["calibration"]), 7, 1, 1)
 
     def get_sensors_configuration(self):
         self.dialog.log('Started Sensors configuration', logging.info)
@@ -142,20 +164,24 @@ class Ui_MainWindow(object):
             return
         dict_sensors = {
             'sensors': list(map(lambda x: str(x.currentText()), self.sensors['sensors'])),
-            'channels': list(map(lambda x: str(x.currentText()), self.sensors['channels']))
+            'channels': list(map(lambda x: str(x.currentText()), self.sensors['channels'])),
+            'calibration':list(map(lambda x: [x[0].value(),x[1].value()], self.sensors['calibration']))
         }
         if len(set(dict_sensors['channels'])) < len(dict_sensors['channels']):
             self.critical_message("A channel has been attributed twice !")
             self.dialog.log('Sensors configuration failed : A channel has been attributed twice', logging.error)
             return
         else:
-            self.config['sensors'] = list(zip(dict_sensors['sensors'], dict_sensors['channels']))
+            self.config['sensors'] = list(zip(dict_sensors['sensors'], dict_sensors['channels'],dict_sensors['calibration']))
+            print(self.config)
             self.dialog.log('Sensors configuration ended successfully', logging.info)
             msg = QMessageBox()
             msg.setIcon(QMessageBox.Information)
             msg.setText("Sensors configuration saved")
             msg.setWindowTitle("Saved")
             msg.exec_()
+        with open('data/config/settings_config.json', 'w') as f:
+            json.dump(self.config, f)
 
     def get_measure_configuration(self):
         # scans
@@ -180,9 +206,9 @@ class Ui_MainWindow(object):
         self.config['delay'] = self.spin_delay_value.value()
         # filename
         if self.csv_file.isChecked():
-            self.config['file'] = {'type': 'csv'}
+            pass
         elif self.xlsx_file.isChecked():
-            self.config['file'] = {'type': 'xlsx'}
+            pass
         else:
             self.critical_message("A file type should be selected")
             self.dialog.log('Filename configuration failed: no filetype selected', logging.error)
@@ -192,13 +218,11 @@ class Ui_MainWindow(object):
             self.dialog.log('Filename configuration failed: no filename provided', logging.error)
             return
 
-        self.config['file']['filename'] = self.filename_input.text()
+        self.config['file'] = self.filename_input.text()
         self.dialog.log('Measure configuration done successfully', logging.info)
-        if self.save_check.isChecked():
-            with open('data/config/settings_config.json', 'w') as f:
-                json.dump(self.config, f)
-
-            self.dialog.log('Configuration saved for future starts', logging.info)
+        with open('data/config/settings_config.json', 'w') as f:
+            json.dump(self.config, f)
+        self.dialog.log('Configuration saved for future starts', logging.info)
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Information)
         msg.setText("Measures configuration saved")
@@ -237,7 +261,7 @@ class Ui_MainWindow(object):
             self.remove_sensor()
 
         for couple in self.config['sensors']:
-            self.add_sensor(sensor=couple[0], channel=couple[1])
+            self.add_sensor(sensor=couple[0], channel=couple[1],x0=couple[2][0],x1=couple[2][1])
         # scans
         if self.config['scans'] == 'infinite':
             self.radio_infinite.setChecked(True)
@@ -247,11 +271,12 @@ class Ui_MainWindow(object):
         # delay
         self.spin_delay_value.setValue(self.config['delay'])
         # file
-        if self.config['file']['type'] == 'csv':
+        if self.config['file'].endswith('csv'):
             self.csv_file.setChecked(True)
         else:
             self.xlsx_file.setChecked(True)
-        self.filename_input.setText(self.config['file']['filename'])
+        self.filename_input.setText(self.config['file'])
+        self.filename_input.setToolTip(self.filename_input.text())
 
     def load_config(self):
         try:
@@ -264,10 +289,15 @@ class Ui_MainWindow(object):
 
     def start_acquisition(self):
         text = f"Sensors:\n"
-        for value in self.config['sensors']:
-            text += f"- {value[0]} on channel @{value[1]}\n"
+        try:
+            for value in self.config['sensors']:
+                text += f"- {value[0]} on channel @{value[1]} calibration : {value[2][1]}*x+{value[2][0]}\n"
+        except KeyError:
+            self.critical_message("No configuration has been added !")
+            self.dialog.log('Failed to start the measure due to lack of configuration', logging.error)
+            return
         text += f"\nNumber of scans: {self.config['scans']}\n\nDelay between scans: {self.config['delay']} seconds\n\n"
-        text += f"Saving in data/save/{self.config['file']['filename']}.{self.config['file']['type']}"
+        text += f"Saving in {self.config['file']}"
         msg = QMessageBox()
         msg.setIcon(QMessageBox.Information)
         msg.setWindowTitle("Start Measure")
@@ -531,24 +561,34 @@ class Ui_MainWindow(object):
         self.gridLayout_5.addLayout(self.grid_delay_2, 2, 2, 1, 1)
         self.grid_save_2 = QtWidgets.QGridLayout()
         self.filename_input = QtWidgets.QLineEdit(self.scrollAreaWidgetContents_3)
+        self.filename_input.setToolTip(self.filename_input.text())
         sizePolicy = QtWidgets.QSizePolicy(QtWidgets.QSizePolicy.Minimum, QtWidgets.QSizePolicy.Fixed)
         sizePolicy.setHorizontalStretch(0)
         sizePolicy.setVerticalStretch(0)
         sizePolicy.setHeightForWidth(self.filename_input.sizePolicy().hasHeightForWidth())
         self.filename_input.setSizePolicy(sizePolicy)
+        self.filename_input.setDisabled(True)
         self.grid_save_2.addWidget(self.filename_input, 0, 0, 1, 1)
-        self.save_check = QtWidgets.QCheckBox("Save Configuration")
-        self.save_check.setToolTip('Check this box to save this configuration and load it later.')
-        self.save_check.setChecked(False)
-        self.save_check.setStyleSheet(self.checkbox_style_sheet)
-        self.grid_save_2.addWidget(self.save_check, 1, 0, 1, 2)
+        self.button_open = QtWidgets.QPushButton(self.scrollAreaWidgetContents_3)
+        self.button_open.setText("Open Explorer")
+        self.button_open.clicked.connect(self.open_explorer)
+        self.button_open.setStyleSheet(self.push_button_style_sheet)
+        self.grid_save_2.addWidget(self.button_open, 1, 0, 1, 2)
         self.vertical_layour_radio_save = QtWidgets.QVBoxLayout()
         self.csv_file = QtWidgets.QRadioButton(self.scrollAreaWidgetContents_3)
-        self.csv_file.setStyleSheet(self.label_style_sheet)
+        self.csv_file.setStyleSheet("""
+            border: 1px solid gray;
+            border-radius: 9px;
+        """)
         self.csv_file.setObjectName('file')
         self.vertical_layour_radio_save.addWidget(self.csv_file)
         self.xlsx_file = QtWidgets.QRadioButton(self.scrollAreaWidgetContents_3)
-        self.xlsx_file.setStyleSheet(self.label_style_sheet)
+        self.xlsx_file.setStyleSheet(
+            """
+                border: 1px solid gray;
+                border-radius: 9px;
+            """
+        )
         file_group = QtWidgets.QButtonGroup(self.scrollAreaWidgetContents_3)
         file_group.addButton(self.csv_file)
         file_group.addButton(self.xlsx_file)
@@ -600,6 +640,17 @@ class Ui_MainWindow(object):
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
         self.dialog.log('Widgets have been created', logging.info)
 
+    def open_explorer(self):
+        if self.csv_file.isChecked():
+            _filter = "Csv Files (*.csv)"
+        else:
+            _filter = "Excel Files (*.xlsx)"
+        name = QtWidgets.QFileDialog.getSaveFileName( caption='Save File',filter=_filter)[0]
+        print(name)
+        self.filename_input.setText(name)
+        self.filename_input.setToolTip(self.filename_input.text())
+        self.config['file'] = name
+
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
         MainWindow.setWindowTitle(_translate("MainWindow", "MainWindow"))
@@ -616,8 +667,8 @@ class Ui_MainWindow(object):
         self.label_scans_title.setText(_translate("MainWindow", "Number of scans"))
         self.label_save_title.setText(_translate("MainWindow", "Save"))
         self.filename_input.setPlaceholderText(_translate("MainWindow", "file_name"))
-        self.csv_file.setText(_translate("MainWindow", ".csv"))
-        self.xlsx_file.setText(_translate("MainWindow", ".xlsx"))
+        self.csv_file.setText(_translate("MainWindow", "CSV"))
+        self.xlsx_file.setText(_translate("MainWindow", "Excel"))
         self.button_start.setText(_translate("MainWindow", "START"))
         self.menuFile.setTitle(_translate("MainWindow", "File"))
         self.menuAbout.setTitle(_translate("MainWindow", "Help"))

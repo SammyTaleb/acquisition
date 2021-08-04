@@ -1,2 +1,3 @@
 border: 1px solid gray;
 border-radius: 9px;
+min-width: 8em;

@@ -27,19 +27,18 @@ class Connection:
     def __init__(self, _logger, _config):
         self.logger = _logger
         self.config = _config
-        #self.logger.log('Opened a new connection instance', logging.info)
+        self.logger.log('Opened a new connection instance', logging.info)
         try:
             self.rm = pyvisa.ResourceManager()
-            #self.logger.log('ressource manager created', logging.info)
+            self.logger.log('ressource manager created', logging.info)
 
             self.inst = self.rm.open_resource(self.rm.list_resources()[0])
             time.sleep(1)
             device = self.inst.query("*IDN?")
-            #self.logger.log(f"Connected to , {device.split(',')[0]} {device.split(',')[1]}", logging.info)
+            self.logger.log(f"Connected to , {device.split(',')[0]} {device.split(',')[1]}", logging.info)
             self.configure()
         except Exception as e:
-            pass
-            #self.logger.log('Connection Failed', logging.error)
+            self.logger.log('Connection Failed', logging.error)
             # raise TimeoutError('Device is not found')
 
     def configure(self):
@@ -57,7 +56,7 @@ class Connection:
                 self.inst.write(query)
         scan_list = "(@" + ','.join([sensor[1] for sensor in self.config['sensors']]) + ')'
         self.inst.write("ROUTE:SCAN " + scan_list)
-        #self.logger.log('Configuration is done', logging.info)
+        self.logger.log('Configuration is done', logging.info)
 
 
 class MyMplCanvas(FigureCanvas, TimedAnimation):
@@ -79,8 +78,14 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
         TimedAnimation.__init__(self, self.fig, interval=1000 * self.config['delay'], repeat=False)
         self.setParent(parent)
         self.start = time.time()
-        self.filetype = self.config['file']['type']
-        self.filename = f'{self.config["file"]["filename"]}-{datetime.datetime.now().strftime("%d-%m-%Y-%H-%M")}.{self.filetype}'
+        self.filename = self.config["file"]
+        try:
+            with open(self.filename) as f:
+                pass
+            dummy = self.filename.split('.')
+            self.filename = dummy[0]+f'-{datetime.datetime.now().strftime("%d-%m-%Y--%Hh%M")}.'+dummy[1]
+        except IOError:
+            pass
 
     def create_axes(self):
         nbr = len(self.config['sensors'])
@@ -108,8 +113,8 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
         for i, val in enumerate(self.config['sensors']):
             self.data[i][0].append(t)
             self.data_final[f'time_{val[0]}_{val[1]}'].append(t)
-            self.data[i][1].append(float(y[i]))
-            self.data_final[f'value_{val[0]}_{val[1]}'].append(float(y[i]))
+            self.data[i][1].append(val[2][1]*float(y[i])+val[2][0])
+            self.data_final[f'value_{val[0]}_{val[1]}'].append(val[2][1]*float(y[i])+val[2][0])
         self.save()
         self.table_window.add_row(self.data)
 
@@ -130,10 +135,10 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
 
     def save(self):
         data = pd.DataFrame(self.data_final)
-        if self.filetype == 'csv':
-            data.to_csv('data/saved/' + self.filename)
+        if self.filename.endswith('csv'):
+            data.to_csv(self.filename)
         else:
-            data.to_excel('data/saved/' + self.filename)
+            data.to_excel(self.filename)
 
     def new_frame_seq(self):
         return iter(range(self.config['scans']))
@@ -221,23 +226,21 @@ class Ui_OtherWindow(object):
         self.button_pause.clicked.connect(self.pause)
         self.button_stop.clicked.connect(self.stop)
         self.button_start.clicked.connect(self.start)
-        filename = self.config['file']['filename']
-        self.filetype = self.config['file']['type']
         self.filename = self.mplCanvas_widget.filename
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def stop(self):
         data = pd.DataFrame(self.mplCanvas_widget.data_final)
-        if self.filetype == 'csv':
-            data.to_csv('data/saved/' + self.filename)
+        if self.filename.endswith('csv'):
+            data.to_csv(self.filename)
         else:
-            data.to_excel('data/saved/' + self.filename)
+            data.to_excel(self.filename)
         self.mplCanvas_widget.pause()
         self.button_start.deleteLater()
         self.button_pause.deleteLater()
         self.button_stop.deleteLater()
         self.table.deleteLater()
-        os.startfile(f'{os.getcwd()}\data\saved\{self.filename}')
+        os.startfile(self.filename)
 
     def pause(self):
         self.mplCanvas_widget.pause()
