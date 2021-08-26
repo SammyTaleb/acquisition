@@ -7,6 +7,7 @@ import datetime
 import logging
 import os
 import time
+import itertools
 
 import numpy as np
 import pandas as pd
@@ -74,7 +75,7 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
         # self.table_window.win.show()
         self.config = config
         self.conn = conn
-        self.fig = Figure(figsize=(15, 10), dpi=100)
+        self.fig = Figure(figsize=(15, 10))
         self.fig.set_tight_layout({"pad":1.0})
         self.axes = []
         self.lines = []
@@ -105,12 +106,15 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
 
     def create_axes(self):
         nbr = len(self.config["sensors"])
-        nbr_plots = len(self.config["plots"])
+        try:
+            nbr_plots = len(self.config["plots"])
+        except TypeError:
+            nbr_plots = 0
         color_palette = list(sns.color_palette(None, nbr+nbr_plots))
-        val = str(nbr+nbr_plots) + "2"
+        val = nbr+nbr_plots
+        gs = self.fig.add_gridspec(int(val/2)+val%2,2)
         for i in range(nbr):
-            print(int(val + str(i + 1)))
-            ax = self.fig.add_subplot(int(val + str(i + 1)))
+            ax = self.fig.add_subplot(gs[i//2,i%2])
             ax.set_xlabel("time")
             ax.set_ylabel(
                 self.config["sensors"][i][0] + " @" + self.config["sensors"][i][1]
@@ -123,7 +127,7 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
             self.axes.append(ax)
         color_palette =color_palette[nbr:]
         for i in range(nbr_plots):
-            ax = self.fig.add_subplot(int(val + str(i+nbr + 1)))
+            ax = self.fig.add_subplot(gs[(i+nbr)//2,(i+nbr)%2])
             ax.set_xlabel(
                 self.config['sensors'][self.config["plots"][i][1]][0]+"@" + self.config['sensors'][self.config["plots"][i][0]][1]
             )
@@ -158,9 +162,11 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
                 val[2][1] * float(y[i]) + val[2][0]
             )
         decay = len(self.config['sensors'])
-        for i,val in enumerate(self.config['plots']):
-            self.data[decay+i][0].append(self.data[val[0]][1][-1])
-            self.data[decay+i][1].append(self.data[val[1]][1][-1])
+        if 'plots' in self.config.keys():
+            if self.config['plots'] is not None:
+                for i,val in enumerate(self.config['plots']):
+                    self.data[decay+i][0].append(self.data[val[0]][1][-1])
+                    self.data[decay+i][1].append(self.data[val[1]][1][-1])
         self.save()
         self.table_window.add_row(self.data[:decay])
 
@@ -191,7 +197,10 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
             data.to_excel(self.filename)
 
     def new_frame_seq(self):
-        return iter(range(self.config["scans"]))
+        if self.config["scans"]=='infinite':
+            return itertools.count(1,1)
+        else:
+            return iter(range(self.config["scans"]))
 
     def _init_draw(self):
         for line in self.lines:

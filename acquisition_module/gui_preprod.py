@@ -13,6 +13,25 @@ import copy
 
 from acquisition import Connection, Ui_PlotWindow, Ui_Table_Window
 
+class SpinBox(QtWidgets.QDoubleSpinBox):
+    def wheelEvent(self, event):
+        event.ignore()
+
+class IntSpinBox(QtWidgets.QSpinBox):
+    def wheelEvent(self, event):
+        event.ignore()
+
+class MyQComboBox(QtWidgets.QComboBox):
+    def __init__(self, scrollWidget=None, *args, **kwargs):
+        super(MyQComboBox, self).__init__(*args, **kwargs)
+        self.scrollWidget=scrollWidget
+        self.setFocusPolicy(QtCore.Qt.StrongFocus)
+
+    def wheelEvent(self, *args, **kwargs):
+        if self.hasFocus():
+            return QtGui.QComboBox.wheelEvent(self, *args, **kwargs)
+        else:
+            return self.scrollWidget.wheelEvent(*args, **kwargs)
 
 class QTextEditLogger(logging.Handler):
     def __init__(self, parent):
@@ -128,7 +147,7 @@ class Ui_MainWindow(object):
         labels[1].setText('Channel Y')
         combo_channels=[]
         for i in range(2):
-            combo_channel = QtWidgets.QComboBox(self.scrollAreaWidgetContents_add_plot)
+            combo_channel = MyQComboBox(self.scrollAreaWidgetContents_add_plot)
             combo_channel.setFont(self.font)
             combo_channel.setStyleSheet(self.combobox_style_sheet)
             for i in ["101", "102", "103", "201", "202", "203"]:
@@ -194,13 +213,13 @@ class Ui_MainWindow(object):
             labels[2].setToolTip(
                 "Add calibration values to get new_value = x0+x1*value"
             )
-            combo_sensor = QtWidgets.QComboBox(self.scrollAreaWidgetContents)
+            combo_sensor = MyQComboBox(self.scrollAreaWidgetContents)
             combo_sensor.setFont(self.font)
             combo_sensor.setStyleSheet(self.combobox_style_sheet)
             for i in ["TC", "Temp K", "Temp L", "Pressure"]:
                 combo_sensor.addItem(i)
 
-            combo_channel = QtWidgets.QComboBox(self.scrollAreaWidgetContents)
+            combo_channel = MyQComboBox(self.scrollAreaWidgetContents)
             combo_channel.setFont(self.font)
             combo_channel.setStyleSheet(self.combobox_style_sheet)
             for i in ["101", "102", "103", "201", "202", "203"]:
@@ -213,9 +232,9 @@ class Ui_MainWindow(object):
             if index >= 0:
                 combo_sensor.setCurrentIndex(index)
 
-            spin_a = QtWidgets.QDoubleSpinBox(self.scrollAreaWidgetContents)
+            spin_a = SpinBox(self.scrollAreaWidgetContents)
             spin_a.setStyleSheet(self.spinbox_style_sheet)
-            spin_b = QtWidgets.QDoubleSpinBox(self.scrollAreaWidgetContents)
+            spin_b = SpinBox(self.scrollAreaWidgetContents)
             spin_b.setStyleSheet(self.spinbox_style_sheet)
             spin_a.setValue(x1)
             spin_b.setValue(x0)
@@ -373,10 +392,9 @@ class Ui_MainWindow(object):
     def get_plots_configuration(self):
         self.dialog.log("Started Plots configuration", logging.info)
         if len(self.plots["channel_X"]) == 0:
-            self.critical_message("There is no plot to configure !")
-            self.dialog.log(
-                "Plots configuration failed : No plot to configure", logging.error
-            )
+            self.config['plots']= None
+            with open("data/config/settings_config.json", "w") as f:
+                json.dump(self.config, f)
             return
         dict_plots = {
             "channel_X": list(
@@ -471,12 +489,11 @@ class Ui_MainWindow(object):
         self.filename_input.setToolTip(self.filename_input.text())
         # plots
         if "plots" in self.config.keys():
-            for i in range(2):
-                self.remove_plot()
-            for couple in self.config["plots"]:
-                self.add_plots(
-                    self.config['sensors'][couple[0]][1], self.config['sensors'][couple[1]][1]
-                )
+            if self.config['plots'] is not None:
+                for couple in self.config["plots"]:
+                    self.add_plots(
+                        self.config['sensors'][couple[0]][1], self.config['sensors'][couple[1]][1]
+                    )
 
     def load_config(self):
         try:
@@ -731,7 +748,7 @@ class Ui_MainWindow(object):
         nbr_scans_group.addButton(self.radio_finite)
 
         self.grid_scans_2.addWidget(self.radio_infinite, 2, 0, 1, 1)
-        self.spinbox_nbr_scan = QtWidgets.QSpinBox(self.scrollAreaWidgetContents_3)
+        self.spinbox_nbr_scan = IntSpinBox(self.scrollAreaWidgetContents_3)
         self.spinbox_nbr_scan.setStyleSheet(self.spinbox_style_sheet)
         self.spinbox_nbr_scan.setMaximum(10000)
 
@@ -803,7 +820,7 @@ class Ui_MainWindow(object):
         self.gridLayout_5.addLayout(self.grid_save_1, 1, 4, 1, 1)
         self.grid_delay_2 = QtWidgets.QGridLayout()
         self.grid_delay_2.setContentsMargins(0, -1, -1, -1)
-        self.spin_delay_value = QtWidgets.QDoubleSpinBox(
+        self.spin_delay_value = SpinBox(
             self.scrollAreaWidgetContents_3
         )
         self.spin_delay_value.setStyleSheet(self.spinbox_style_sheet)
@@ -882,8 +899,7 @@ class Ui_MainWindow(object):
         self.scrollAreaWidgetContents_add_plot.setGeometry(QtCore.QRect(0, 0, 951, 189))
         self.gridLayout_add_plots_2 = QtWidgets.QGridLayout(self.scrollAreaWidgetContents_add_plot)
 
-        for i in range(2):
-            self.add_plots()
+
         self.scroll_add_plot.setWidget(self.scrollAreaWidgetContents_add_plot)
         self.gridLayout_add_plots.addWidget(self.scroll_add_plot, 1, 0, 1, 1)
         self.group_right_add_plot = QtWidgets.QGroupBox(self.frame_add_plots)
@@ -918,9 +934,6 @@ class Ui_MainWindow(object):
         )
         self.gridLayout_7_add_plot.addItem(spacerItem2, 0, 0, 1, 1)
         self.gridLayout_add_plots.addWidget(self.group_right_add_plot, 1, 1, 1, 1)
-
-
-
         self.grid_bottom_add_plots = QtWidgets.QGridLayout()
         self.button_save_add_plots = QtWidgets.QPushButton(self.frame_add_plots)
         self.button_save_add_plots.setMinimumSize(QtCore.QSize(84, 0))
@@ -939,10 +952,6 @@ class Ui_MainWindow(object):
         )
         self.grid_bottom_add_plots.addItem(spacerItem4, 1, 0, 1, 1)
         self.gridLayout_add_plots.addLayout(self.grid_bottom_add_plots, 2, 0, 1, 2)
-
-
-
-
         self.verticalLayout_2.addWidget(self.frame_add_plots)
         self.frame_buttons = QtWidgets.QFrame(self.widget)
         self.frame_buttons.setFrameShape(QtWidgets.QFrame.StyledPanel)
@@ -953,6 +962,7 @@ class Ui_MainWindow(object):
         )
         self.gridLayout_9.addItem(spacerItem9, 1, 4, 1, 1)
         self.button_start = QtWidgets.QPushButton(self.frame_buttons)
+        self.button_start.setShortcut("Ctrl+Return")
         sizePolicy = QtWidgets.QSizePolicy(
             QtWidgets.QSizePolicy.MinimumExpanding, QtWidgets.QSizePolicy.Maximum
         )
