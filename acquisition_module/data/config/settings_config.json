@@ -1,5 +1,1 @@
-<<<<<<< HEAD
-{"sensors": [["TC", "101"], ["TC", "102"], ["TC", "103"]], "scans": 5000, "delay": 10.0, "file": {"type": "xlsx", "filename": "Testconservation2307"}}
-=======
-{"sensors": [["TC", "101", [0.0, 1.0]], ["TC", "102", [0.0, 10.0]]], "scans": "infinite", "delay": 0.5, "file": "C:/Users/sammy/Desktop/test.csv", "plots": null}
->>>>>>> 3e61e1e9205cebe4cbd0b094f93e3144b454ed14
+{"sensors": [["TC", "101", [0.0, 1.0]], ["TC", "102", [0.0, 10.0]], ["TC", "201", [1.0, 1.0]]], "scans": "infinite", "delay": 0.5, "file": "C:/Users/sammy/Desktop/test.xlsx", "plots": [[0, 1], [1, 2]]}
