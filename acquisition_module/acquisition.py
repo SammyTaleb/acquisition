@@ -84,7 +84,7 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
         for i in self.config["sensors"]:
             self.data_final[f"time_{i[0]}_{i[1]}"] = []
             self.data_final[f"value_{i[0]}_{i[1]}"] = []
-        self.data = [[[], []] for i in range(len(self.axes))]
+        self.data = [[[], [],[]] for i in range(len(self.axes))]
         FigureCanvas.__init__(self, self.fig)
         TimedAnimation.__init__(
             self, self.fig, interval=1000 * self.config["delay"], repeat=False
@@ -110,7 +110,12 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
             nbr_plots = len(self.config["plots"])
         except TypeError:
             nbr_plots = 0
+        indexes_x2 = []
+        for i,val in enumerate(self.config["plots"]):
+            if val[2]!=None:
+                indexes_x2.append([i,val[1],val[2]])
         color_palette = list(sns.color_palette(None, nbr+nbr_plots))
+        print(color_palette)
         val = nbr+nbr_plots
         gs = self.fig.add_gridspec(int(val/2)+val%2,2)
         for i in range(nbr):
@@ -125,7 +130,9 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
             ax.add_line(line)
             self.lines.append(line)
             self.axes.append(ax)
-        color_palette =color_palette[nbr:]
+        for i in indexes_x2:
+            color_palette[i[0]+nbr] = [color_palette[i[1]],color_palette[i[2]]]
+        color_palette = color_palette[nbr:]
         for i in range(nbr_plots):
             ax = self.fig.add_subplot(gs[(i+nbr)//2,(i+nbr)%2])
             ax.set_xlabel(
@@ -136,10 +143,32 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
             )
             ax.set_xlim(0, 20)
             ax.set_ylim(-5, 5)
-            line = Line2D([], [], color=color_palette[i],linestyle='None',marker ='.')
-            ax.add_line(line)
-            self.lines.append(line)
-            self.axes.append(ax)
+            if self.config['plots'][i][2]!=None:
+                ax.set_ylabel(
+                    self.config['sensors'][self.config["plots"][i][1]][0] + " @" +
+                    self.config['sensors'][self.config["plots"][i][1]][1],
+                    color=color_palette[i][0]
+                )
+                ax2 = ax.twinx()
+                ax2.set_ylabel(
+                    self.config['sensors'][self.config["plots"][i][2]][0] + " @" +
+                    self.config['sensors'][self.config["plots"][i][2]][1],
+                    color=color_palette[i][1]
+                )
+                ax2.set_xlim(0, 20)
+                ax2.set_ylim(-5, 5)
+                line_ax = Line2D([], [], color=color_palette[i][0],linestyle='None',marker ='.')
+                line_ax2 = Line2D([], [], color=color_palette[i][1], linestyle='None', marker='.')
+                ax.add_line(line_ax)
+                ax2.add_line(line_ax2)
+                self.lines.append([line_ax,line_ax2])
+                self.axes.append([ax,ax2])
+
+            else:
+                line = Line2D([], [], color=color_palette[i], linestyle='None', marker='.')
+                ax.add_line(line)
+                self.lines.append(line)
+                self.axes.append(ax)
 
     def data_gen(self):
         t = time.time() - self.start
@@ -161,12 +190,19 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
             self.data_final[f"value_{val[0]}_{val[1]}"].append(
                 val[2][1] * float(y[i]) + val[2][0]
             )
+            self.data[i][2].append(None)
         decay = len(self.config['sensors'])
         if 'plots' in self.config.keys():
             if self.config['plots'] is not None:
                 for i,val in enumerate(self.config['plots']):
-                    self.data[decay+i][0].append(self.data[val[0]][1][-1])
-                    self.data[decay+i][1].append(self.data[val[1]][1][-1])
+                    if val[2]!=None:
+                        self.data[decay + i][0].append(self.data[val[0]][1][-1])
+                        self.data[decay + i][1].append(self.data[val[1]][1][-1])
+                        self.data[decay + i][2].append(self.data[val[2]][1][-1])
+                    else:
+                        self.data[decay+i][0].append(self.data[val[0]][1][-1])
+                        self.data[decay+i][1].append(self.data[val[1]][1][-1])
+                        self.data[decay + i][2].append(None)
         self.save()
         self.table_window.add_row(self.data[:decay])
 
@@ -174,19 +210,44 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
         i = framedata
         self.data_gen()
         for i in range(len(self.lines)):
-            self.lines[i].set_data(self.data[i][0], self.data[i][1])
-            # Auto scale X_lim up
-            if max(self.data[i][0]) > self.axes[i].get_xlim()[1] - 5:
-                self.axes[i].set_xlim(0, max(self.data[i][0]) + 10)
-            # Auto Scale y_lim up
-            if max(self.data[i][1]) > self.axes[i].get_ylim()[1] - 5:
-                self.axes[i].set_ylim(
-                    self.axes[i].get_ylim()[0], max(self.data[i][1]) + 2
-                )
-            if min(self.data[i][1]) < self.axes[i].get_ylim()[0] + 5:
-                self.axes[i].set_ylim(
-                    min(self.data[i][1]) - 2, self.axes[i].get_ylim()[1]
-                )
+            if type(self.lines[i])==list:
+                self.lines[i][0].set_data(self.data[i][0], self.data[i][1])
+                self.lines[i][1].set_data(self.data[i][0], self.data[i][2])
+                # Auto scale X_lim up
+                if max(self.data[i][0]) > self.axes[i][0].get_xlim()[1] - 5:
+                    self.axes[i][0].set_xlim(0, max(self.data[i][0]) + 10)
+                # Auto Scale y_lim up
+                if max(self.data[i][1]) > self.axes[i][0].get_ylim()[1] - 5:
+                    self.axes[i][0].set_ylim(
+                        self.axes[i][0].get_ylim()[0], max(self.data[i][1]) + 2
+                    )
+                if max(self.data[i][2]) > self.axes[i][1].get_ylim()[1] - 5:
+                    self.axes[i][1].set_ylim(
+                        self.axes[i][1].get_ylim()[0], max(self.data[i][2]) + 2
+                    )
+
+                if min(self.data[i][1]) < self.axes[i][0].get_ylim()[0] + 5:
+                    self.axes[i][0].set_ylim(
+                        min(self.data[i][1]) - 2, self.axes[i][0].get_ylim()[1]
+                    )
+                if min(self.data[i][2]) < self.axes[i][1].get_ylim()[0] + 5:
+                    self.axes[i][1].set_ylim(
+                        min(self.data[i][2]) - 2, self.axes[i][1].get_ylim()[1]
+                    )
+            else:
+                self.lines[i].set_data(self.data[i][0], self.data[i][1])
+                # Auto scale X_lim up
+                if max(self.data[i][0]) > self.axes[i].get_xlim()[1] - 5:
+                    self.axes[i].set_xlim(0, max(self.data[i][0]) + 10)
+                # Auto Scale y_lim up
+                if max(self.data[i][1]) > self.axes[i].get_ylim()[1] - 5:
+                    self.axes[i].set_ylim(
+                        self.axes[i].get_ylim()[0], max(self.data[i][1]) + 2
+                    )
+                if min(self.data[i][1]) < self.axes[i].get_ylim()[0] + 5:
+                    self.axes[i].set_ylim(
+                        min(self.data[i][1]) - 2, self.axes[i].get_ylim()[1]
+                    )
         self._drawn_artists = self.lines
 
     def save(self):
@@ -204,7 +265,11 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
 
     def _init_draw(self):
         for line in self.lines:
-            line.set_data([], [])
+            if type(line)==list:
+                for ele in line:
+                    ele.set_data([], [])
+            else:
+                line.set_data([], [])
 
 
 class Ui_Table_Window(object):

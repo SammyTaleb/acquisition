@@ -1,1 +1,1 @@
-{"sensors": [["TC", "101", [0.0, 1.0]], ["TC", "102", [0.0, 10.0]], ["TC", "201", [1.0, 1.0]]], "scans": "infinite", "delay": 0.5, "file": "C:/Users/sammy/Desktop/test.xlsx", "plots": [[0, 1], [1, 2]]}
+{"sensors": [["TC", "101", [1.0, 1.0]], ["TC", "102", [4.0, 5.0]], ["TC", "201", [2.0, 1.0]]], "scans": "infinite", "delay": 0.5, "file": "C:/Users/sammy/Desktop/test.xlsx", "plots": [[0, 1, 2], [0, 1, 0]]}

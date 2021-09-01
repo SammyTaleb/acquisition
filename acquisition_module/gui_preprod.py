@@ -4,27 +4,31 @@
 ###                                                                            ###
 ##################################################################################
 
+import copy
 import json
 import logging
 import time
+
 from PyQt5 import QtCore, QtGui, QtWidgets
 from PyQt5.QtWidgets import QMessageBox
-import copy
 
 from acquisition import Connection, Ui_PlotWindow, Ui_Table_Window
+
 
 class SpinBox(QtWidgets.QDoubleSpinBox):
     def wheelEvent(self, event):
         event.ignore()
 
+
 class IntSpinBox(QtWidgets.QSpinBox):
     def wheelEvent(self, event):
         event.ignore()
 
+
 class MyQComboBox(QtWidgets.QComboBox):
     def __init__(self, scrollWidget=None, *args, **kwargs):
         super(MyQComboBox, self).__init__(*args, **kwargs)
-        self.scrollWidget=scrollWidget
+        self.scrollWidget = scrollWidget
         self.setFocusPolicy(QtCore.Qt.StrongFocus)
 
     def wheelEvent(self, *args, **kwargs):
@@ -32,6 +36,7 @@ class MyQComboBox(QtWidgets.QComboBox):
             return QtGui.QComboBox.wheelEvent(self, *args, **kwargs)
         else:
             return self.scrollWidget.wheelEvent(*args, **kwargs)
+
 
 class QTextEditLogger(logging.Handler):
     def __init__(self, parent):
@@ -66,10 +71,12 @@ class Ui_MainWindow(object):
     def __init__(self, MainWindow):
         self.sensor_limit = True
         self.plots = {
-            "channel_X":[],
-            "channel_X_labels":[],
-            "channel_Y":[],
+            "channel_X": [],
+            "channel_X_labels": [],
+            "channel_Y": [],
             "channel_Y_labels": [],
+            "channel_X2":[],
+            "channel_X2_labels":[],
         }
         self.sensors = {
             "sensors": [],
@@ -131,12 +138,13 @@ class Ui_MainWindow(object):
     def add_sensor_decorator(self, func):
         def run():
             func()
+
         return run
 
-    def add_plots(self,channel_X = "101",channel_Y="102"):
+    def add_plots(self, channel_X="101", channel_Y="102", channel_X2="Not Used"):
         self.font.setPointSize(12)
         labels = []
-        for i in range(2):
+        for i in range(3):
             label = QtWidgets.QLabel(self.scrollAreaWidgetContents_add_plot)
             label.setPalette(self.palette_text_color)
             label.setFont(self.font)
@@ -144,14 +152,17 @@ class Ui_MainWindow(object):
             label.setAlignment(QtCore.Qt.AlignCenter)
             labels.append(label)
         labels[0].setText('Channel X')
-        labels[1].setText('Channel Y')
-        combo_channels=[]
-        for i in range(2):
+        labels[1].setText('Channel Y1')
+        labels[2].setText('Channel Y2')
+        combo_channels = []
+        for i in range(3):
             combo_channel = MyQComboBox(self.scrollAreaWidgetContents_add_plot)
             combo_channel.setFont(self.font)
             combo_channel.setStyleSheet(self.combobox_style_sheet)
-            for i in ["101", "102", "103", "201", "202", "203"]:
-                combo_channel.addItem(i)
+            if i == 2:
+                combo_channel.addItem("Not Used")
+            for j in ["101", "102", "103", "201", "202", "203"]:
+                combo_channel.addItem(j)
             combo_channels.append(combo_channel)
         index = combo_channels[0].findText(channel_X, QtCore.Qt.MatchFixedString)
         if index >= 0:
@@ -159,10 +170,15 @@ class Ui_MainWindow(object):
         index = combo_channels[1].findText(channel_Y, QtCore.Qt.MatchFixedString)
         if index >= 0:
             combo_channels[1].setCurrentIndex(index)
+        index = combo_channels[2].findText(channel_X2, QtCore.Qt.MatchFixedString)
+        if index >= 0:
+            combo_channels[2].setCurrentIndex(index)
         self.plots["channel_X"].append(combo_channels[0])
         self.plots["channel_Y"].append(combo_channels[1])
         self.plots["channel_X_labels"].append(labels[0])
         self.plots["channel_Y_labels"].append(labels[1])
+        self.plots["channel_X2"].append(combo_channels[2])
+        self.plots['channel_X2_labels'].append(labels[2])
         self.gridLayout_add_plots_2.addWidget(
             self.plots["channel_X_labels"][-1],
             len(self.plots["channel_X_labels"]),
@@ -182,6 +198,12 @@ class Ui_MainWindow(object):
         )
         self.gridLayout_add_plots_2.addWidget(
             self.plots["channel_Y"][-1], len(self.plots["channel_Y"]), 3, 1, 1
+        )
+        self.gridLayout_add_plots_2.addWidget(
+            self.plots["channel_X2_labels"][-1], len(self.plots["channel_Y"]), 4, 1, 1
+        )
+        self.gridLayout_add_plots_2.addWidget(
+            self.plots["channel_X2"][-1], len(self.plots["channel_Y"]), 5, 1, 1
         )
 
     def add_sensor(self, sensor="TC", channel="101", x0=0, x1=1):
@@ -392,7 +414,7 @@ class Ui_MainWindow(object):
     def get_plots_configuration(self):
         self.dialog.log("Started Plots configuration", logging.info)
         if len(self.plots["channel_X"]) == 0:
-            self.config['plots']= None
+            self.config['plots'] = None
             with open("data/config/settings_config.json", "w") as f:
                 json.dump(self.config, f)
             return
@@ -402,9 +424,12 @@ class Ui_MainWindow(object):
             ),
             "channel_Y": list(
                 map(lambda x: str(x.currentText()), self.plots["channel_Y"])
+            ),
+            "channel_X2":list(
+                map(lambda x:str(x.currentText()),self.plots["channel_X2"])
             )
         }
-        channels_used = set(dict_plots['channel_X']+dict_plots['channel_Y'])
+        channels_used = set(dict_plots['channel_X'] + dict_plots['channel_Y']+dict_plots['channel_X2']).difference({'Not Used'})
         for ele in channels_used:
             if ele not in [i[1] for i in self.config['sensors']]:
                 self.critical_message(f"The channel {ele} has been attributed to a plot but is not used for a sensor !")
@@ -415,13 +440,17 @@ class Ui_MainWindow(object):
                 return
         dict_plots_2 = copy.copy(dict_plots)
         for key in dict_plots.keys():
-            for i,val in enumerate(dict_plots[key]):
-                dict_plots_2[key][i] = [j[1] for j in self.config['sensors']].index(val)
+            for i, val in enumerate(dict_plots[key]):
+                if val=='Not Used':
+                    dict_plots_2[key][i]=None
+                else:
+                    dict_plots_2[key][i] = [j[1] for j in self.config['sensors']].index(val)
 
         self.config["plots"] = list(
             zip(
                 dict_plots_2["channel_X"],
-                dict_plots_2["channel_Y"]
+                dict_plots_2["channel_Y"],
+                dict_plots_2["channel_X2"]
             )
         )
         print(self.config)
@@ -457,7 +486,7 @@ class Ui_MainWindow(object):
         )
         msgbox.addButton(QMessageBox.Yes)
         msgbox.addButton(QMessageBox.No)
-        msgbox.setDefaultButton(QMessageBox.No)
+        msgbox.setDefaultButton(QMessageBox.Yes)
         reply = msgbox.exec()
         if reply == QMessageBox.Yes:
             self.load_config()
@@ -491,8 +520,15 @@ class Ui_MainWindow(object):
         if "plots" in self.config.keys():
             if self.config['plots'] is not None:
                 for couple in self.config["plots"]:
+                    if len(couple)>2:
+                        if couple[2]!=None:
+                            value = self.config['sensors'][couple[2]][1]
+                        else:
+                            value = 'Not Used'
+                    else:
+                        value = 'Not Used'
                     self.add_plots(
-                        self.config['sensors'][couple[0]][1], self.config['sensors'][couple[1]][1]
+                        self.config['sensors'][couple[0]][1], self.config['sensors'][couple[1]][1],value
                     )
 
     def load_config(self):
@@ -558,8 +594,8 @@ class Ui_MainWindow(object):
         self.centralwidget = QtWidgets.QWidget(MainWindow)
         self.verticalLayout = QtWidgets.QVBoxLayout(self.centralwidget)
         self.verticalLayout.setContentsMargins(10, 10, 10, 10)
-        #self.label_title = QtWidgets.QLabel(self.centralwidget)
-        #self.label_title.setPalette(self.palette_text_color)
+        # self.label_title = QtWidgets.QLabel(self.centralwidget)
+        # self.label_title.setPalette(self.palette_text_color)
         self.font.setPointSize(14)
         self.font.setBold(True)
         self.font.setWeight(75)
@@ -899,7 +935,6 @@ class Ui_MainWindow(object):
         self.scrollAreaWidgetContents_add_plot.setGeometry(QtCore.QRect(0, 0, 951, 189))
         self.gridLayout_add_plots_2 = QtWidgets.QGridLayout(self.scrollAreaWidgetContents_add_plot)
 
-
         self.scroll_add_plot.setWidget(self.scrollAreaWidgetContents_add_plot)
         self.gridLayout_add_plots.addWidget(self.scroll_add_plot, 1, 0, 1, 1)
         self.group_right_add_plot = QtWidgets.QGroupBox(self.frame_add_plots)
@@ -998,7 +1033,7 @@ class Ui_MainWindow(object):
         self.actionAbout = QtWidgets.QAction(MainWindow)
         self.showLog = QtWidgets.QAction(MainWindow)
         self.showLog.setShortcut('Ctrl+L')
-        self.showLog.triggered.connect(lambda : self.show_log_func())
+        self.showLog.triggered.connect(lambda: self.show_log_func())
         self.menuFile.addAction(self.actionExit)
         self.menuFile.addAction(self.showLog)
         self.menuAbout.addAction(self.actionAbout)
@@ -1009,13 +1044,12 @@ class Ui_MainWindow(object):
         self.dialog.log("Widgets have been created", logging.info)
 
     def show_log_func(self):
-        if self.showLog.text()=='Remove Log':
+        if self.showLog.text() == 'Remove Log':
             self.dialog.hide()
             self.showLog.setText("Show Log")
         else:
             self.dialog.show()
             self.showLog.setText("Remove Log")
-
 
     def open_explorer(self):
         if self.csv_file.isChecked():
@@ -1033,7 +1067,7 @@ class Ui_MainWindow(object):
     def retranslateUi(self, MainWindow):
         _translate = QtCore.QCoreApplication.translate
         MainWindow.setWindowTitle(_translate("MainWindow", "ACQUISITION PLATFORM"))
-        #self.label_title.setText(_translate("MainWindow", "ACQUISITION PLATFORM"))
+        # self.label_title.setText(_translate("MainWindow", "ACQUISITION PLATFORM"))
         self.label_sensor_title.setText(_translate("MainWindow", "Sensors Settings"))
         self.button_add_sensor.setText(_translate("MainWindow", "Add sensor"))
         self.button_add_plot.setText(_translate("MainWindow", "Add plot"))
