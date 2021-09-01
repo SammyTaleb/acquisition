@@ -5,12 +5,7 @@ Starting the acquisition will retrieve the data and give a real time plot and re
 The measurements can be paused, resumed and stopped at any time. All the data is then saved in a
 csv or xlsx file with the filename provided by the user.
 
-## Configure the sensors
+## Installation
 
-## Save the configuration for later uses
+Requires python 3.6
 
-## Change the filename
-
-## Start, pause, resume and stop the acquisition
-
-## Retrieve the saved data
