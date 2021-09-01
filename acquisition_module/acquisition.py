@@ -149,12 +149,14 @@ class MyMplCanvas(FigureCanvas, TimedAnimation):
                     self.config['sensors'][self.config["plots"][i][1]][1],
                     color=color_palette[i][0]
                 )
+                ax.tick_params(axis='y', labelcolor=color_palette[i][0])
                 ax2 = ax.twinx()
                 ax2.set_ylabel(
                     self.config['sensors'][self.config["plots"][i][2]][0] + " @" +
                     self.config['sensors'][self.config["plots"][i][2]][1],
                     color=color_palette[i][1]
                 )
+                ax2.tick_params(axis='y', labelcolor=color_palette[i][1])
                 ax2.set_xlim(0, 20)
                 ax2.set_ylim(-5, 5)
                 line_ax = Line2D([], [], color=color_palette[i][0],linestyle='None',marker ='.')
